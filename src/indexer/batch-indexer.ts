@@ -1,13 +1,18 @@
 /* eslint-disable @typescript-eslint/prefer-for-of */
-import { JsonRpcProvider } from "ethers";
+import type { Block, TransactionResponse } from "ethers";
+import { JsonRpcProvider, Transaction } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
 
 import type { IChainConfig } from "../common";
-import { CHAIN_CONFIG, L2MessageQueueInterface, ScrollChainInterface } from "../common";
+import {
+  BlockSyncStep,
+  CHAIN_CONFIG,
+  L2MessageQueueInterface,
+  MaxConcurrentCall,
+  ScrollChainInterface,
+} from "../common";
 import { WithdrawTrie } from "./withdraw-trie";
-
-const BlockSyncStep = 1000;
 
 interface IBatchIndexerMetadata {
   LastCommittedBatchIndex: number;
@@ -18,6 +23,13 @@ interface IBatchIndexerMetadata {
     Height: number;
     Branches: Array<string>;
   };
+}
+
+interface IWithdrawCache {
+  block: number;
+  queueIndex: number;
+  messageHash: string;
+  transactionHash: string;
 }
 
 interface IWithdraw {
@@ -163,13 +175,38 @@ export class BatchIndexer {
         topics: [[CommitBatchTopicHash, RevertBatchTopicHash, FinalizeBatchTopicHash]],
       });
       console.log(`L1 Sync from ${fromBlock} to ${toBlock}, ${logs.length} logs`);
+
+      const txHashes: Array<string> = [];
+      const blocks: Array<number> = [];
       for (let index = 0; index < logs.length; ++index) {
         const log = logs[index];
         if (log.topics[0] === CommitBatchTopicHash) {
-          const tx = await this.l1Provider.getTransaction(log.transactionHash);
+          txHashes.push(log.transactionHash);
+          blocks.push(log.blockNumber);
+        }
+      }
+
+      // cache all transactions and block timestamp
+      const blockCache: Record<number, Block> = await this.cacheBlocks(blocks);
+      const txCache: Record<string, TransactionResponse> = await this.cacheTransactions(txHashes);
+
+      // cache all withdraw events
+      let startBlock = 1e9;
+      let endBlock = -1;
+      for (const tx of Object.values(txCache)) {
+        const [x, y] = decodeBlockRange(tx.data);
+        if (x < startBlock) startBlock = x;
+        if (y > endBlock) endBlock = y;
+      }
+      const withdrawalCache = await this.cacheWithdrawals(startBlock, endBlock);
+
+      for (let index = 0; index < logs.length; ++index) {
+        const log = logs[index];
+        if (log.topics[0] === CommitBatchTopicHash) {
+          const tx = txCache[log.transactionHash];
           const blockRange = decodeBlockRange(tx!.data);
-          const blockTimestamp = (await this.l1Provider.getBlock(log.blockNumber))!.timestamp;
-          const withdrawals = await this.fetchL2Withdrawals(blockRange[0], blockRange[1]);
+          const blockTimestamp = blockCache[log.blockNumber].timestamp;
+          const withdrawals = this.fetchL2Withdrawals(blockRange[0], blockRange[1], withdrawalCache);
 
           const event = ScrollChainInterface.decodeEventLog("CommitBatch", log.data, log.topics);
           this.committedBatches.push({
@@ -223,6 +260,9 @@ export class BatchIndexer {
 
   public getBatchByMonth(year: number, month: number): Array<IBatch> {
     const monthString = `${year}${month.toString().padStart(2, "0")}`;
+    if (this.batchCache[monthString] !== undefined) {
+      return this.batchCache[monthString];
+    }
     const filepath = path.join(this.finalizedBatchFileDir, monthString + ".json");
     let batches: Array<IBatch> = [];
     if (fs.existsSync(filepath)) {
@@ -232,9 +272,41 @@ export class BatchIndexer {
     return batches;
   }
 
-  private async fetchL2Withdrawals(startBlock: number, endBlock: number): Promise<Array<IWithdraw>> {
+  private async cacheTransactions(hashes: Array<string>): Promise<Record<string, TransactionResponse>> {
+    const txCache: Record<string, TransactionResponse> = {};
+    for (let i = 0; i < hashes.length; i += MaxConcurrentCall) {
+      const tasks = [];
+      for (let j = i; j < hashes.length && j - i < MaxConcurrentCall; ++j) {
+        tasks.push(this.l1Provider.getTransaction(hashes[j]));
+      }
+      console.log("L1 Fetch transactions, count:", tasks.length);
+      const results = await Promise.all(tasks);
+      for (const tx of results) {
+        txCache[tx!.hash] = tx!;
+      }
+    }
+    return txCache;
+  }
+
+  private async cacheBlocks(blocks: Array<number>): Promise<Record<number, Block>> {
+    const blockCache: Record<string, Block> = {};
+    for (let i = 0; i < blocks.length; i += MaxConcurrentCall) {
+      const tasks = [];
+      for (let j = i; j < blocks.length && j - i < MaxConcurrentCall; ++j) {
+        tasks.push(this.l1Provider.getBlock(blocks[j]));
+      }
+      console.log("L1 Fetch blocks, count:", tasks.length);
+      const results = await Promise.all(tasks);
+      for (const b of results) {
+        blockCache[b!.number] = b!;
+      }
+    }
+    return blockCache;
+  }
+
+  private async cacheWithdrawals(startBlock: number, endBlock: number): Promise<Array<IWithdrawCache>> {
     const AppendMessageTopicHash = L2MessageQueueInterface.getEvent("AppendMessage").topicHash;
-    const withdrawals: Array<IWithdraw> = [];
+    const withdrawals: Array<IWithdrawCache> = [];
     while (startBlock <= endBlock) {
       const fromBlock = startBlock;
       const toBlock = Math.min(fromBlock + BlockSyncStep - 1, endBlock);
@@ -251,14 +323,28 @@ export class BatchIndexer {
         if (log.topics[0] === AppendMessageTopicHash) {
           const event = L2MessageQueueInterface.decodeEventLog("AppendMessage", log.data, log.topics);
           withdrawals.push({
+            block: log.blockNumber,
             queueIndex: Number(event.index),
             messageHash: event.messageHash,
             transactionHash: log.transactionHash,
-            proof: "0x",
           });
         }
       }
     }
+    return withdrawals;
+  }
+
+  private fetchL2Withdrawals(startBlock: number, endBlock: number, cache: Array<IWithdrawCache>): Array<IWithdraw> {
+    const withdrawals = cache
+      .filter((x) => startBlock <= x.block && x.block <= endBlock)
+      .map((w) => {
+        return {
+          queueIndex: w.queueIndex,
+          messageHash: w.messageHash,
+          transactionHash: w.transactionHash,
+          proof: "0x",
+        };
+      });
     const proofs = this.withdrawTrie.appendMessages(withdrawals.map((w) => w.messageHash));
     for (let i = 0; i < proofs.length; ++i) {
       withdrawals[i].proof = proofs[i];

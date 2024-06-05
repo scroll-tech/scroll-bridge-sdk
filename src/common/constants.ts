@@ -1,7 +1,10 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-const { L1_RPC_URL, L2_RPC_URL } = process.env;
+const { L1_RPC_URL, L2_RPC_URL, MAX_CONCURRENT_CALL, BLOCK_SYNC_STEP } = process.env;
+
+export const BlockSyncStep = BLOCK_SYNC_STEP ? parseInt(BLOCK_SYNC_STEP) : 1000;
+export const MaxConcurrentCall = MAX_CONCURRENT_CALL ? parseInt(MAX_CONCURRENT_CALL) : 2;
 
 export interface IChainConfig {
   L1RpcUrl: string;
