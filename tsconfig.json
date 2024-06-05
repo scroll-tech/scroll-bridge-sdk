@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "strict": true,
+    "module": "commonjs",
+    "moduleResolution": "Node",
+    "declaration": true,
+    "declarationMap": true,
+    "noEmitOnError": true,
+    "outDir": "bin",
+    "sourceMap": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "strictPropertyInitialization": false,
+    "lib": ["ESNext"],
+    "target": "ES2021",
+    "composite": true
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "scroll-sdk",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:scroll-tech/scroll-sdk.git",
+  "author": "zimpha <zimpha@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc --build",
+    "gen": "npx typechain --ts-nocheck --target=ethers-v6 './src/abi-json/**/*.json' --out-dir src/@contracts",
+    "validate": "yarn ts-node src/index.ts validation",
+    "postinstall": "yarn gen",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.12.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.3.0",
+    "@commitlint/config-conventional": "^19.2.2",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@types/node": "^20.12.13",
+    "@typescript-eslint/eslint-plugin": "^7.11.0",
+    "@typescript-eslint/parser": "^7.11.0",
+    "commitlint": "19.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-spellcheck": "^0.0.20",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.5",
+    "prettier": "^3.2.5",
+    "prettier-plugin-organize-imports": "^3.2.4",
+    "typechain": "^8.3.2",
+    "typescript-eslint-language-service": "^5.0.5"
+  },
+  "lint-staged": {
+    "*.{js,ts}": "npx eslint --cache --fix",
+    "!(docs/apis/*).md": "prettier --ignore-unknown --write"
+  },
+  "engines": {
+    "node": ">=20.12.2"
+  }
+}
