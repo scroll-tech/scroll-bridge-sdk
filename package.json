@@ -7,6 +7,10 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc --build",
+    "index:batch:scroll": "yarn ts-node src/cmd.ts index batch -n scroll -d $PWD/.state",
+    "index:batch:scroll-sepolia": "yarn ts-node src/cmd.ts index batch -n scroll-sepolia -d $PWD/.state",
+    "index:search:scroll": "yarn ts-node src/cmd.ts index search -n scroll -d $PWD/.state",
+    "index:search:scroll-sepolia": "yarn ts-node src/cmd.ts index search -n scroll-sepolia -d $PWD/.state",
     "gen": "npx typechain --ts-nocheck --target=ethers-v6 './src/abi-json/**/*.json' --out-dir src/@contracts",
     "validate": "yarn ts-node src/index.ts validation",
     "postinstall": "yarn gen",

@@ -270,7 +270,7 @@ export class BatchIndexer {
     }
   }
 
-  public getBatchByMonth(year: number, month: number): Array<IBatch> {
+  public getBatchByMonth(year: number, month: number, cache: boolean = true): Array<IBatch> {
     const monthString = `${year}${month.toString().padStart(2, "0")}`;
     if (this.batchCache[monthString] !== undefined) {
       return this.batchCache[monthString];
@@ -280,8 +280,71 @@ export class BatchIndexer {
     if (fs.existsSync(filepath)) {
       batches = JSON.parse(fs.readFileSync(filepath).toString());
     }
-    this.batchCache[monthString] = batches;
+    if (cache) {
+      this.batchCache[monthString] = batches;
+    }
     return batches;
+  }
+
+  public getWithdrawalsByTxHash(txHash: string): Array<[IBatch, IWithdraw]> {
+    const results: Array<[IBatch, IWithdraw]> = [];
+    for (const batch of this.committedBatches) {
+      for (const w of batch.withdrawals) {
+        if (w.transactionHash === txHash) results.push([batch, w]);
+      }
+    }
+    if (results.length > 0) return results;
+    let year = this.config.StartYear;
+    let month = this.config.StartMonth;
+    while (true) {
+      const batches = this.getBatchByMonth(year, month, false);
+      if (batches.length === 0) break;
+      for (const batch of batches) {
+        for (const w of batch.withdrawals) {
+          if (w.transactionHash === txHash) results.push([batch, w]);
+        }
+        if (results.length > 0) break;
+      }
+      if (results.length > 0) break;
+      month += 1;
+      if (month > 12) {
+        year += 1;
+        month = 1;
+      }
+    }
+    return results;
+  }
+
+  public getWithdrawalByMessageHash(messageHash: string): [IBatch, IWithdraw] | undefined {
+    let result: [IBatch, IWithdraw] | undefined = undefined;
+    for (const batch of this.committedBatches) {
+      for (const w of batch.withdrawals) {
+        if (w.messageHash === messageHash) result = [batch, w];
+        if (result) break;
+      }
+      if (result) break;
+    }
+    if (result) return result;
+    let year = this.config.StartYear;
+    let month = this.config.StartMonth;
+    while (true) {
+      const batches = this.getBatchByMonth(year, month, false);
+      if (batches.length === 0) break;
+      for (const batch of batches) {
+        for (const w of batch.withdrawals) {
+          if (w.messageHash === messageHash) result = [batch, w];
+          if (result) break;
+        }
+        if (result) break;
+      }
+      if (result) break;
+      month += 1;
+      if (month > 12) {
+        year += 1;
+        month = 1;
+      }
+    }
+    return result;
   }
 
   private async cacheTransactions(hashes: Array<string>): Promise<Record<string, TransactionResponse>> {
