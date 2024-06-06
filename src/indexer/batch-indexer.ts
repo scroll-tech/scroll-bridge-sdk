@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/prefer-for-of */
 import type { Block, TransactionResponse } from "ethers";
-import { JsonRpcProvider, Transaction } from "ethers";
+import { JsonRpcProvider } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -226,11 +226,23 @@ export class BatchIndexer {
           this.metadata.LastCommittedBatchIndex = Number(event.batchIndex);
         } else if (log.topics[0] === RevertBatchTopicHash) {
           const event = ScrollChainInterface.decodeEventLog("RevertBatch", log.data, log.topics);
-          const batch = this.committedBatches.pop();
-          if (batch?.index !== Number(event.batchIndex) || batch?.batchHash !== event.batchHash) {
-            throw Error(`RevertBatch failed, expected[${event.batchIndex}] found[${batch?.index}]`);
+          const removeIndex = this.committedBatches.findIndex((b) => b.index === Number(event.batchIndex));
+          if (removeIndex === -1) {
+            throw Error(`RevertBatch failed, no batch with index[${event.batchIndex}] exists`);
+          }
+          const [batch] = this.committedBatches.splice(removeIndex, 1);
+          if (batch.index !== Number(event.batchIndex) || batch.batchHash !== event.batchHash) {
+            throw Error(`RevertBatch failed, expected[${event.batchIndex}] found[${batch.index}]`);
           }
           console.log("RevertBatch:", `index[${event.batchIndex}]`, `hash[${event.batchHash}]`);
+
+          const withdrawal = this.findPreviousWithdrawals(batch);
+          if (withdrawal) {
+            this.withdrawTrie.reset(withdrawal.queueIndex, withdrawal.messageHash, withdrawal.proof);
+          } else {
+            this.withdrawTrie.initialize(0, 0, []);
+          }
+          console.log("Reset WithdrawTrie by Withdrawal: ", JSON.stringify(withdrawal ?? {}));
           this.metadata.LastCommittedBatchIndex -= 1;
         } else if (log.topics[0] === FinalizeBatchTopicHash) {
           const event = ScrollChainInterface.decodeEventLog("FinalizeBatch", log.data, log.topics);
@@ -352,5 +364,38 @@ export class BatchIndexer {
     return withdrawals;
   }
 
-  private async tryFetchCacheFromAWS(network: string, cacheDir: string): Promise<void> {}
+  private findPreviousWithdrawals(removedBatch: IBatch): IWithdraw | undefined {
+    for (let i = this.committedBatches.length - 1; i > 0; --i) {
+      const batch = this.committedBatches[i];
+      if (batch.index < removedBatch.index && batch.withdrawals.length > 0) {
+        return batch.withdrawals[batch.withdrawals.length - 1];
+      }
+    }
+    const d = new Date(removedBatch.commitTimestamp * 1000);
+    let year = d.getUTCFullYear();
+    let month = d.getUTCMonth() + 1;
+    while (true) {
+      const monthString = `${year}${month.toString().padStart(2, "0")}`;
+      let batches: Array<IBatch>;
+      if (this.batchCache[monthString] !== undefined) {
+        batches = this.batchCache[monthString];
+      } else {
+        const filepath = path.join(this.finalizedBatchFileDir, monthString + ".json");
+        if (!fs.existsSync(filepath)) break;
+        batches = JSON.parse(fs.readFileSync(filepath).toString());
+      }
+      for (let i = batches.length - 1; i > 0; --i) {
+        const batch = batches[i];
+        if (batch.index < removedBatch.index && batch.withdrawals.length > 0) {
+          return batch.withdrawals[batch.withdrawals.length - 1];
+        }
+      }
+      month -= 1;
+      if (month === 0) {
+        year -= 1;
+        month = 12;
+      }
+    }
+    return undefined;
+  }
 }

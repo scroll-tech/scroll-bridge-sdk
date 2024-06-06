@@ -1,6 +1,17 @@
-import { ZeroHash, concat, keccak256 } from "ethers";
+import type { BytesLike } from "ethers";
+import { ZeroHash, concat, getBytes, hexlify, keccak256 } from "ethers";
 
 const MaxHeight = 40;
+
+// decodeBytesToMerkleProof transfer byte array to bytes32 array. The caller should make sure the length is matched.
+function decodeBytesToMerkleProof(proofBytes: BytesLike): Array<string> {
+  const data = getBytes(proofBytes);
+  const proof: Array<string> = new Array(Math.floor(data.length / 32));
+  for (let i = 0; i < data.length; i += 32) {
+    proof[i / 32] = hexlify(data.slice(i, i + 32));
+  }
+  return proof;
+}
 
 // updateBranchWithNewMessage update the branches to latest with new message and return the merkle proof for the message.
 function updateBranchWithNewMessage(
@@ -30,6 +41,30 @@ function updateBranchWithNewMessage(
   return merkleProof;
 }
 
+// recoverBranchFromProof will recover latest branches from merkle proof and message hash
+function recoverBranchFromProof(proof: Array<string>, index: number, msgHash: string): Array<string> {
+  const branches: Array<string> = new Array(MaxHeight);
+  let root = msgHash;
+  let height: number;
+  for (height = 0; index > 0; height++) {
+    if (index % 2 === 0) {
+      branches[height] = root;
+      // it's a left child, the right child must be null
+      root = keccak256(concat([root, proof[height]]));
+    } else {
+      // it's a right child, use previously computed hash
+      branches[height] = proof[height];
+      root = keccak256(concat([proof[height], root]));
+    }
+    index >>= 1;
+  }
+  branches[height] = root;
+  for (height++; height < MaxHeight; height++) {
+    branches[height] = ZeroHash;
+  }
+  return branches;
+}
+
 export class WithdrawTrie {
   public nextMessageNonce: number;
 
@@ -53,13 +88,19 @@ export class WithdrawTrie {
     this.branches.fill(ZeroHash);
   }
 
-  public initialize(currentMessageNonce: number, height: number, branches: Array<string>): void {
+  public initialize(nextMessageNonce: number, height: number, branches: Array<string>): void {
     while (branches.length < MaxHeight) {
       branches.push(ZeroHash);
     }
-    this.nextMessageNonce = currentMessageNonce;
+    this.nextMessageNonce = nextMessageNonce;
     this.height = height;
     this.branches = branches;
+  }
+
+  public reset(currentMessageNonce: number, msgHash: string, proofBytes: string): void {
+    const proof = decodeBytesToMerkleProof(proofBytes);
+    const branches = recoverBranchFromProof(proof, currentMessageNonce, msgHash);
+    this.initialize(currentMessageNonce + 1, proof.length, branches);
   }
 
   public appendMessages(hashes: Array<string>): Array<string> {
