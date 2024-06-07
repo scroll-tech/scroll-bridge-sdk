@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-const { L1_RPC_URL, L2_RPC_URL, MAX_CONCURRENT_CALL, BLOCK_SYNC_STEP } = process.env;
+const { L1_SCROLL_RPC_URL, L2_SCROLL_RPC_URL, L1_SCROLL_SEPOLIA_RPC_URL, L2_SCROLL_SEPOLIA_RPC_URL, MAX_CONCURRENT_CALL, BLOCK_SYNC_STEP } = process.env;
 
 export const BlockSyncStep = BLOCK_SYNC_STEP ? parseInt(BLOCK_SYNC_STEP) : 1000;
 export const MaxConcurrentCall = MAX_CONCURRENT_CALL ? parseInt(MAX_CONCURRENT_CALL) : 2;
@@ -22,8 +22,8 @@ export interface IChainConfig {
 
 export const CHAIN_CONFIG: Record<string, IChainConfig> = {
   scroll: {
-    L1RpcUrl: L1_RPC_URL ?? "https://rpc.ankr.com/eth",
-    L2RpcUrl: L2_RPC_URL ?? "https://rpc.ankr.com/scroll",
+    L1RpcUrl: L1_SCROLL_RPC_URL ?? "https://rpc.ankr.com/eth",
+    L2RpcUrl: L2_SCROLL_RPC_URL ?? "https://rpc.ankr.com/scroll",
     StartBlock: 18318214,
     StartYear: 2023,
     StartMonth: 10,
@@ -35,8 +35,8 @@ export const CHAIN_CONFIG: Record<string, IChainConfig> = {
     },
   },
   "scroll-sepolia": {
-    L1RpcUrl: L1_RPC_URL ?? "https://rpc.ankr.com/eth_sepolia",
-    L2RpcUrl: L2_RPC_URL ?? "https://rpc.ankr.com/scroll_sepolia_testnet",
+    L1RpcUrl: L1_SCROLL_SEPOLIA_RPC_URL ?? "https://rpc.ankr.com/eth_sepolia",
+    L2RpcUrl: L2_SCROLL_SEPOLIA_RPC_URL ?? "https://rpc.ankr.com/scroll_sepolia_testnet",
     StartBlock: 4041342,
     StartYear: 2023,
     StartMonth: 8,
