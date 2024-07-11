@@ -46,10 +46,15 @@ interface IBatch {
 }
 
 function decodeBlockRange(data: string): [number, number] {
-  const [_version, _parentBatchHeader, chunks, _skippedL1MessageBitmap] = ScrollChainInterface.decodeFunctionData(
-    "commitBatch",
-    data,
-  ) as any as [number, string, Array<string>, string];
+  let chunks: Array<string>;
+  let _version: number;
+  if (data.startsWith("0x1325aca0")) {
+    [_version, , chunks] = ScrollChainInterface.decodeFunctionData("commitBatch", data);
+  } else if (data.startsWith("0x86b053a9")) {
+    [_version, , chunks] = ScrollChainInterface.decodeFunctionData("commitBatchWithBlobProof", data);
+  } else {
+    throw Error("Invalid calldata: " + data);
+  }
   let startBlock: number = -1;
   let endBlock: number = -1;
   for (const chunk of chunks) {
@@ -197,7 +202,7 @@ export class BatchIndexer {
           const tx = txCache[log.transactionHash];
           const blockRange = decodeBlockRange(tx!.data);
           const blockTimestamp = blockCache[log.blockNumber].timestamp;
-          const withdrawals = this.fetchL2Withdrawals(blockRange[0], blockRange[1], withdrawalCache, false);
+          const withdrawals = this.fetchL2Withdrawals(blockRange[0], blockRange[1], withdrawalCache);
 
           const event = ScrollChainInterface.decodeEventLog("CommitBatch", log.data, log.topics);
           this.committedBatches.push({
@@ -244,12 +249,14 @@ export class BatchIndexer {
             );
           }
 
-          const withdrawals = this.fetchL2Withdrawals(
-            newFinalizedBatches[0].blockRange[0],
-            lastBatch.blockRange[1],
-            withdrawalCache,
-            true,
-          );
+          const withdrawals: Array<IWithdraw> = [];
+          for (const batch of newFinalizedBatches) {
+            withdrawals.push(...batch.withdrawals);
+          }
+          const proofs = this.withdrawTrie.appendMessages(withdrawals.map((w) => w.messageHash));
+          for (let i = 0; i < proofs.length; ++i) {
+            withdrawals[i].proof = proofs[i];
+          }
           const messageHashToProof: Record<string, string> = {};
           for (const withdrawal of withdrawals) {
             messageHashToProof[withdrawal.messageHash] = withdrawal.proof;
@@ -419,12 +426,7 @@ export class BatchIndexer {
     return withdrawals;
   }
 
-  private fetchL2Withdrawals(
-    startBlock: number,
-    endBlock: number,
-    cache: Array<IWithdrawCache>,
-    withProof: boolean,
-  ): Array<IWithdraw> {
+  private fetchL2Withdrawals(startBlock: number, endBlock: number, cache: Array<IWithdrawCache>): Array<IWithdraw> {
     const withdrawals = cache
       .filter((x) => startBlock <= x.block && x.block <= endBlock)
       .map((w) => {
@@ -435,56 +437,29 @@ export class BatchIndexer {
           proof: "0x",
         };
       });
-    if (withProof) {
-      const proofs = this.withdrawTrie.appendMessages(withdrawals.map((w) => w.messageHash));
-      for (let i = 0; i < proofs.length; ++i) {
-        withdrawals[i].proof = proofs[i];
-      }
-    }
     return withdrawals;
   }
 
-  private findPreviousWithdrawals(removedBatch: IBatch): IWithdraw | undefined {
-    for (let i = this.committedBatches.length - 1; i > 0; --i) {
-      const batch = this.committedBatches[i];
-      if (batch.index < removedBatch.index && batch.withdrawals.length > 0) {
-        return batch.withdrawals[batch.withdrawals.length - 1];
-      }
-    }
-    const d = new Date(removedBatch.commitTimestamp * 1000);
-    let year = d.getUTCFullYear();
-    let month = d.getUTCMonth() + 1;
-    while (true) {
-      const monthString = `${year}${month.toString().padStart(2, "0")}`;
-      let batches: Array<IBatch>;
-      if (this.batchCache[monthString] !== undefined) {
-        batches = this.batchCache[monthString];
-      } else {
-        const filepath = path.join(this.finalizedBatchFileDir, monthString + ".json");
-        if (!fs.existsSync(filepath)) break;
-        batches = JSON.parse(fs.readFileSync(filepath).toString());
-      }
-      for (let i = batches.length - 1; i > 0; --i) {
-        const batch = batches[i];
-        if (batch.index < removedBatch.index && batch.withdrawals.length > 0) {
-          return batch.withdrawals[batch.withdrawals.length - 1];
-        }
-      }
-      month -= 1;
-      if (month === 0) {
-        year -= 1;
-        month = 12;
-      }
-    }
-    return undefined;
-  }
-
   private findLastFinalizedWithdrawal(): IWithdraw | undefined {
-    const d = new Date(Date.now());
-    let year = d.getUTCFullYear();
-    let month = d.getUTCMonth() + 1;
+    let year = this.config.StartYear;
+    let month = this.config.StartMonth;
+    let lastYear = 0;
+    let lastMonth = 0;
     while (true) {
       const monthString = `${year}${month.toString().padStart(2, "0")}`;
+      const filepath = path.join(this.finalizedBatchFileDir, monthString + ".json");
+      if (!fs.existsSync(filepath)) break;
+      lastYear = year;
+      lastMonth = month;
+      month += 1;
+      if (month === 13) {
+        year += 1;
+        month = 1;
+      }
+    }
+    if (lastYear === 0) return undefined;
+    while (true) {
+      const monthString = `${lastYear}${lastMonth.toString().padStart(2, "0")}`;
       const filepath = path.join(this.finalizedBatchFileDir, monthString + ".json");
       if (!fs.existsSync(filepath)) break;
       const batches = JSON.parse(fs.readFileSync(filepath).toString());
@@ -494,10 +469,10 @@ export class BatchIndexer {
           return batch.withdrawals[batch.withdrawals.length - 1];
         }
       }
-      month -= 1;
-      if (month === 0) {
-        year -= 1;
-        month = 12;
+      lastMonth += 1;
+      if (lastMonth === 13) {
+        lastYear += 1;
+        lastMonth = 1;
       }
     }
     return undefined;
