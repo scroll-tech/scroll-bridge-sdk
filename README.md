@@ -11,7 +11,7 @@ yarn index:batch:scroll
 To speed up the indexing process, you can download latest snapshot which is built by Scroll bi-weekly. It would take about 5 minutes to index from snapshot to latest state.
 
 ```bash
-curl <url TBD>
+curl https://withdraw-proof.s3.us-west-2.amazonaws.com/scroll.batch.tar.gz
 tar xvf state-cache/scroll.batch.tar.gz
 ```
 
