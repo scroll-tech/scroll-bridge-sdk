@@ -29,9 +29,9 @@ This repository requires `node` version>=20.12.2 and `yarn` to be previously ins
 Details about the environment variables:
 
 - `L1_SCROLL_RPC_URL`: The layer1 mainnet rpc used, defaults to `https://rpc.ankr.com/eth`
-- `L2_SCROLL_RPC_URL`: The layer2 mainnet rpc used, defaults to `https://rpc.ankr.com/scroll`
+- `L2_SCROLL_RPC_URL`: The layer2 mainnet rpc used, defaults to `https://rpc.scroll.io`
 - `L1_SCROLL_SEPOLIA_RPC_URL`: The layer1 Sepolia rpc used, defaults to `https://rpc.ankr.com/eth_sepolia`
-- `L2_SCROLL_SEPOLIA_RPC_URL`: The layer2 Sepolia rpc used, defaults to `https://rpc.ankr.com/scroll_sepolia_testnet`
+- `L2_SCROLL_SEPOLIA_RPC_URL`: The layer2 Sepolia rpc used, defaults to `https://sepolia-rpc.scroll.io`
 - `BLOCK_SYNC_STEP`: The step used to get logs, defaults to 1000. (warning: some rpc node might not support, if set it too large)
 - `MAX_CONCURRENT_CALL`: The max concurrent threads to request data from rpc, defaults to `2`
 
