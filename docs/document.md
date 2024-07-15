@@ -12,7 +12,7 @@ This documentation will help you with following things:
 
 ## How to run scroll-bridge-sdk
 
-Run scroll-bridge-sdk will index data and generate withdraws proofs.
+Run scroll-bridge-sdk will index data and generate withdrawal proofs.
 
 ### Requirements
 
