@@ -23,7 +23,7 @@ export interface IChainConfig {
 export const CHAIN_CONFIG: Record<string, IChainConfig> = {
   scroll: {
     L1RpcUrl: L1_SCROLL_RPC_URL ?? "https://rpc.ankr.com/eth",
-    L2RpcUrl: L2_SCROLL_RPC_URL ?? "https://rpc.ankr.com/scroll",
+    L2RpcUrl: L2_SCROLL_RPC_URL ?? "https://rpc.scroll.io",
     StartBlock: 18318214,
     StartYear: 2023,
     StartMonth: 10,
@@ -36,7 +36,7 @@ export const CHAIN_CONFIG: Record<string, IChainConfig> = {
   },
   "scroll-sepolia": {
     L1RpcUrl: L1_SCROLL_SEPOLIA_RPC_URL ?? "https://rpc.ankr.com/eth_sepolia",
-    L2RpcUrl: L2_SCROLL_SEPOLIA_RPC_URL ?? "https://rpc.ankr.com/scroll_sepolia_testnet",
+    L2RpcUrl: L2_SCROLL_SEPOLIA_RPC_URL ?? "https://sepolia-rpc.scroll.io",
     StartBlock: 4041342,
     StartYear: 2023,
     StartMonth: 8,
