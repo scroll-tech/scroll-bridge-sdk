@@ -26,7 +26,7 @@ MAX_CONCURRENT_CALL=10
 
 If you want to index testnet data, replace `scroll` with `scroll-sepolia`.
 
-### Find withdraw proof by transaction hash or message hash
+### Find withdrawal proof by transaction hash or message hash
 
 ```bash
 yarn index:search:scroll --tx-hash <tx hash>
